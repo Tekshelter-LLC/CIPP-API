@@ -1,6 +1,4 @@
-using namespace System.Net
-
-Function Invoke-ListMailboxes {
+function Invoke-ListMailboxes {
     <#
     .FUNCTIONALITY
         Entrypoint
@@ -9,15 +7,10 @@ Function Invoke-ListMailboxes {
     #>
     [CmdletBinding()]
     param($Request, $TriggerMetadata)
-
-    $APIName = $Request.Params.CIPPEndpoint
-    $Headers = $Request.Headers
-    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
-
     # Interact with query parameters or the body of the request.
     $TenantFilter = $Request.Query.tenantFilter
     try {
-        $Select = 'id,ExchangeGuid,ArchiveGuid,UserPrincipalName,DisplayName,PrimarySMTPAddress,RecipientType,RecipientTypeDetails,EmailAddresses,WhenSoftDeleted,IsInactiveMailbox,ForwardingSmtpAddress,DeliverToMailboxAndForward,ForwardingAddress,HiddenFromAddressListsEnabled,ExternalDirectoryObjectId,MessageCopyForSendOnBehalfEnabled,MessageCopyForSentAsEnabled,PersistedCapabilities,LitigationHoldEnabled,LitigationHoldDate,LitigationHoldDuration,ComplianceTagHoldApplied,RetentionHoldEnabled,InPlaceHolds'
+        $Select = 'id,ExchangeGuid,ArchiveGuid,UserPrincipalName,DisplayName,PrimarySMTPAddress,RecipientType,RecipientTypeDetails,EmailAddresses,WhenSoftDeleted,IsInactiveMailbox,ForwardingSmtpAddress,DeliverToMailboxAndForward,ForwardingAddress,HiddenFromAddressListsEnabled,ExternalDirectoryObjectId,MessageCopyForSendOnBehalfEnabled,MessageCopyForSentAsEnabled,PersistedCapabilities,LitigationHoldEnabled,LitigationHoldDate,LitigationHoldDuration,ComplianceTagHoldApplied,RetentionHoldEnabled,InPlaceHolds,RetentionPolicy'
         $ExoRequest = @{
             tenantid  = $TenantFilter
             cmdlet    = 'Get-Mailbox'
@@ -63,8 +56,8 @@ Function Invoke-ListMailboxes {
         @{ Name = 'recipientType'; Expression = { $_.'RecipientType' } },
         @{ Name = 'recipientTypeDetails'; Expression = { $_.'RecipientTypeDetails' } },
         @{ Name = 'AdditionalEmailAddresses'; Expression = { ($_.'EmailAddresses' | Where-Object { $_ -clike 'smtp:*' }).Replace('smtp:', '') -join ', ' } },
-        @{Name = 'ForwardingSmtpAddress'; Expression = { $_.'ForwardingSmtpAddress' -replace 'smtp:', '' } },
-        @{Name = 'InternalForwardingAddress'; Expression = { $_.'ForwardingAddress' } },
+        @{ Name = 'ForwardingSmtpAddress'; Expression = { $_.'ForwardingSmtpAddress' -replace 'smtp:', '' } },
+        @{ Name = 'InternalForwardingAddress'; Expression = { $_.'ForwardingAddress' } },
         DeliverToMailboxAndForward,
         HiddenFromAddressListsEnabled,
         ExternalDirectoryObjectId,
@@ -73,10 +66,13 @@ Function Invoke-ListMailboxes {
         LitigationHoldEnabled,
         LitigationHoldDate,
         LitigationHoldDuration,
-        @{ Name = 'LicensedForLitigationHold'; Expression = { ($_.PersistedCapabilities -contains 'BPOS_S_DlpAddOn' -or $_.PersistedCapabilities -contains 'BPOS_S_Enterprise') } },
+        @{ Name = 'LicensedForLitigationHold'; Expression = { ($_.PersistedCapabilities -contains 'EXCHANGE_S_ARCHIVE_ADDON' -or $_.PersistedCapabilities -contains 'EXCHANGE_S_ENTERPRISE') } },
         ComplianceTagHoldApplied,
         RetentionHoldEnabled,
-        InPlaceHolds
+        InPlaceHolds,
+        RetentionPolicy
+        # This select also exists in ListUserMailboxDetails and should be updated if this is changed here
+
 
         $StatusCode = [HttpStatusCode]::OK
     } catch {
@@ -84,8 +80,7 @@ Function Invoke-ListMailboxes {
         $StatusCode = [HttpStatusCode]::Forbidden
         $GraphRequest = $ErrorMessage
     }
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = $StatusCode
             Body       = @($GraphRequest)
         })
